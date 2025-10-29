@@ -1,0 +1,8 @@
+{
+  "task_type": "classification",
+  "model_name": "RandomForestClassifier",
+  "metrics": {
+    "accuracy": 1.0
+  },
+  "model_path": "data/models\\Species_classifier.pkl"
+}
