@@ -3,9 +3,10 @@
     "best_model": "LogisticRegression",
     "metric_used": "accuracy",
     "best_score": 1.0,
+    "training_time_sec": 0.003,
     "all_model_scores": {
         "LogisticRegression": 1.0,
-        "RidgeClassifier": 0.8667,
+        "RidgeClassifier": 0.9,
         "DecisionTreeClassifier": 1.0,
         "RandomForestClassifier": 1.0,
         "ExtraTreesClassifier": 1.0,
@@ -17,5 +18,6 @@
         "SVC": 1.0,
         "MLPClassifier": 1.0
     },
+    "feature_importance": null,
     "model_path": "data/models\\Species_LogisticRegression.pkl"
 }
