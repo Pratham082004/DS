@@ -109,6 +109,5 @@
     "hist_PetalWidthCm": "data/plots\\hist_PetalWidthCm.png",
     "box_PetalWidthCm": "data/plots\\box_PetalWidthCm.png",
     "correlation_heatmap": "data/plots\\correlation_heatmap.png"
-  },
-  "llm_insights": "LLM reasoning failed: OpenRouter API error [401]: {\"error\":{\"message\":\"User not found.\",\"code\":401}}"
+  }
 }

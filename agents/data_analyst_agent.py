@@ -1,29 +1,24 @@
 """
-Agent 1: DataAnalystAgent (Enhanced with LLM Reasoning)
--------------------------------------------------------
-Performs Exploratory Data Analysis (EDA) and adds LLM insights:
+Agent 1: DataAnalystAgent (Enhanced EDA Version without LLM)
+------------------------------------------------------------
+Performs Exploratory Data Analysis (EDA):
 - Dataset overview (shape, data types, missing values)
 - Summary statistics
 - Correlation matrix (for numeric features)
 - Visualizations (histograms, boxplots, heatmap)
-- LLM reasoning: suggests target column & provides insights
 """
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os, json, asyncio
-from llm.deepseek_client import DeepSeekR1 as OpenRouterLLM
+import os, json
 
 
 class DataAnalystAgent:
-    def __init__(self, llm=None):
+    def __init__(self):
         self.name = "DataAnalystAgent"
         self.output_dir = "data/plots"
         os.makedirs(self.output_dir, exist_ok=True)
-
-        # Attach shared or default LLM client (DeepSeek-R1)
-        self.llm = llm or OpenRouterLLM()
 
     # --------------------------- Data Handling --------------------------- #
     def _load_data(self, dataset_path):
@@ -109,32 +104,9 @@ class DataAnalystAgent:
 
         summary["plots"] = self._generate_plots(df)
 
-        # -------------------- LLM Reasoning Integration -------------------- #
-        llm_prompt = (
-            f"Dataset Overview:\n{json.dumps(summary['overview'], indent=2)}\n\n"
-            f"Column Types:\n{summary['dtypes']}\n\n"
-            f"Missing Values (%):\n{summary['missing_percent']}\n\n"
-            f"Correlation Matrix:\n{summary['correlation_matrix']}\n\n"
-            "Based on this data, identify the most probable target column(s), "
-            "suggest key relationships, and describe the potential business or scientific use case "
-            "of this dataset in 3–5 sentences."
-        )
-
-        try:
-            # Ensure a fresh event loop for async call
-            llm_response = asyncio.run(self.llm.simple_prompt(llm_prompt))
-            summary["llm_insights"] = llm_response
-        except Exception as e:
-            summary["llm_insights"] = f"LLM reasoning failed: {e}"
-
         # -------------------- Save JSON Summary -------------------- #
         json_path = "data/eda_summary.json"
         os.makedirs(os.path.dirname(json_path), exist_ok=True)
-
-        # Clean any coroutine values before dumping
-        for k, v in list(summary.items()):
-            if asyncio.iscoroutine(v):
-                summary[k] = f"[Coroutine Placeholder: {k}]"
 
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2)

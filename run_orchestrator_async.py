@@ -1,7 +1,6 @@
 import asyncio
 import nest_asyncio
 from orchestrator.orchestrator_async import AsyncOrchestrator
-from llm.openrouter_client import LLMClient
 
 # Apply nested event loop fix for Spyder/Jupyter
 nest_asyncio.apply()
@@ -9,15 +8,8 @@ nest_asyncio.apply()
 dataset_path = "data/sample.csv"
 target = None
 
-# Initialize the LLM client
-llm_client = LLMClient(model="deepseek-r1:latest")
-
-# Pass the LLM into the orchestrator
-orc = AsyncOrchestrator(
-    use_llm=True,
-    llm_provider="deepseek",
-    llm_client=llm_client
-)
+# Initialize the orchestrator (no LLM)
+orc = AsyncOrchestrator()
 
 async def main():
     results = await orc.run_pipeline(dataset_path, target)
