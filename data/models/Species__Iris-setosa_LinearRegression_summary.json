@@ -1,0 +1,24 @@
+{
+    "task_type": "regression",
+    "target_column": "Species__Iris-setosa",
+    "best_model": "LinearRegression",
+    "metric_used": "r2_score",
+    "best_score": 1.0,
+    "training_time_sec": 0.015,
+    "all_model_scores": {
+        "LinearRegression": 1.0,
+        "Ridge": 0.9996,
+        "Lasso": 0.0,
+        "DecisionTreeRegressor": 1.0,
+        "RandomForestRegressor": 1.0,
+        "ExtraTreesRegressor": 1.0,
+        "GradientBoostingRegressor": 1.0,
+        "AdaBoostRegressor": 1.0,
+        "BaggingRegressor": 0.9985,
+        "KNeighborsRegressor": 1.0,
+        "SVR": 0.9908,
+        "MLPRegressor": 0.9932
+    },
+    "feature_importance": null,
+    "model_path": "data/models\\Species__Iris-setosa_LinearRegression.joblib"
+}

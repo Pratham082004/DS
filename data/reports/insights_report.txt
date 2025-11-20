@@ -1,20 +1,22 @@
 === 📊 Automated Insights Report ===
 
 **General Overview:**
-- Total Features Analyzed: 0
-- Model Name: Unknown
-- Task Type: classification
+- Total Features: 0
+- Model Used: LinearRegression
+- Task Type: regression
 
-✅ Minimal missing values across all features.
+✅ Minimal missing values.
 
-⚠️ Error in Outlier Analysis: '<' not supported between instances of 'dict' and 'dict'
+⚠️ Outlier Error: '<' not supported between instances of 'dict' and 'dict'
+
 ℹ️ No strong correlations found.
 
+**Model Performance:**
+R² Score: 1.000
 
 💡 **Recommendations:**
-- Consider feature scaling or normalization for better model stability.
-- Try dimensionality reduction (PCA) if dataset has many features.
-- Evaluate advanced models (e.g., XGBoost, LightGBM, CatBoost).
-- Apply cross-validation for more reliable performance.
-- Tune hyperparameters using GridSearchCV or Optuna.
-- Check feature importance to remove low-impact columns.
+- Try hyperparameter tuning for improvement.
+- Feature selection can boost performance.
+- Consider boosting models like XGBoost/LightGBM.
+- Evaluate using cross-validation.
+- Normalize/standardize features if needed.

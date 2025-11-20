@@ -1,0 +1,18 @@
+{
+  "executive_summary": "Report generated. Model: Species__Iris-setosa_LinearRegression. Task: Unknown.",
+  "key_findings": [
+    "Missing values summary available.",
+    "Top features: ['Species__Iris-setosa^2', 'Species__Iris-versicolor Species__Iris-virginica', 'Species__Iris-versicolor', 'Species__Iris-virginica', 'Species__Iris-setosa Species__Iris-versicolor', 'Species__Iris-setosa Species__Iris-virginica', 'Species__Iris-versicolor^2', 'Species__Iris-virginica^2']"
+  ],
+  "recommendations": [
+    "Validate data quality.",
+    "Add hyperparameter optimization and CV.",
+    "Monitor model drift."
+  ],
+  "limitations": [
+    "Analysis based on dataset snapshot."
+  ],
+  "next_steps": [
+    "Run optimizer agent; deploy with monitoring."
+  ]
+}

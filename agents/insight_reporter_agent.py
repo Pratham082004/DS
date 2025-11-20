@@ -1,11 +1,8 @@
 """
-Agent 3: InsightReporterAgent (No LLM)
---------------------------------------
-Combines EDA + Model summaries and generates rule-based insights.
-
-Outputs:
-- insights_report.txt
-- insights_report.json
+InsightReporterAgent (Safe + Robust)
+-----------------------------------
+Now prevents accidental loading of .joblib / .pkl as JSON.
+More robust handling of model summary structures.
 """
 
 import os
@@ -21,198 +18,233 @@ class InsightReporterAgent:
         self.output_dir = "data/reports"
         os.makedirs(self.output_dir, exist_ok=True)
 
-    # --------------------------- Safe JSON Loader --------------------------- #
+    # ---------------------------------------------------------------------- #
+    # ✅ FIX #1 — SAFE JSON LOADER
+    # ---------------------------------------------------------------------- #
     def _load_json(self, path):
-        """Load a JSON file safely."""
+        """Load a JSON file safely, blocking binary files."""
         if not os.path.exists(path):
             raise FileNotFoundError(f"File not found: {path}")
-        with open(path, "r", encoding="utf-8") as f:
-            try:
+
+        # Block binary model files
+        if path.endswith(".joblib") or path.endswith(".pkl"):
+            raise ValueError(
+                f"Refusing to load binary model file as JSON: {path}\n"
+                "Pass *_summary.json instead."
+            )
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
-            except Exception as e:
-                raise ValueError(f"Error parsing JSON at {path}: {e}")
+        except Exception as e:
+            raise ValueError(f"Error parsing JSON at {path}: {e}")
 
-    # --------------------------- Utility --------------------------- #
+    # ---------------------------------------------------------------------- #
+    # Utility
+    # ---------------------------------------------------------------------- #
     def _safe_value(self, val):
-        """Safely convert NumPy / invalid types to native Python."""
-        if isinstance(val, (np.generic,)):
+        if isinstance(val, np.generic):
             return val.item()
-        if isinstance(val, (dict, list, str, int, float, bool)) or val is None:
-            return val
-        return str(val)
+        return val if isinstance(val, (dict, list, str, int, float, bool)) else str(val)
 
-    # --------------------------- Core Insight Generator --------------------------- #
+    # ---------------------------------------------------------------------- #
+    # ✅ FIX #2 — Robust model summary extractor
+    # ---------------------------------------------------------------------- #
+    def _extract_best_model_info(self, model_summary):
+        """
+        Handles multiple possible model summary formats:
+        - ModelBuilderAgent
+        - AutoOptimizerAgent
+        - Custom structures
+        """
+        # Try AutoOptimizer format
+        if "best_overall" in model_summary:
+            best = model_summary["best_overall"]
+            return (
+                best.get("name") or best.get("model") or "Unknown",
+                best.get("score") or None
+            )
+
+        # Try ModelBuilderAgent format
+        if "best_model" in model_summary:
+            return (
+                model_summary.get("best_model"),
+                model_summary.get("best_score")
+            )
+
+        if "model_name" in model_summary:
+            return (
+                model_summary.get("model_name"),
+                model_summary.get("metrics", {}).get("accuracy")
+                or model_summary.get("metrics", {}).get("r2")
+            )
+
+        # Fallback
+        return "Unknown", None
+
+    # ---------------------------------------------------------------------- #
+    # Generate Insights
+    # ---------------------------------------------------------------------- #
     def _generate_insights(self, eda_summary, model_summary):
-        print("[InsightReporterAgent] 🔍 Step 1: Starting insight generation...", flush=True)
+        print("[InsightReporterAgent] 🔍 Generating structured insights...", flush=True)
         insights = ["=== 📊 Automated Insights Report ===\n"]
 
+        # Extract model info safely
+        model_name, best_score = self._extract_best_model_info(model_summary)
+        task_type = model_summary.get("task_type", "Unknown")
+
+        # -------- General Overview -------- #
         try:
-            # 1️⃣ General Overview
-            print("[InsightReporterAgent] Step 2: General overview...", flush=True)
+            all_columns = (
+                list(eda_summary.get("columns", [])) or
+                list(eda_summary.get("dtype_corrections", {}).keys())
+            )
+
             insights.append("**General Overview:**")
-            all_columns = list(eda_summary.get("columns", [])) or list(eda_summary.get("dtype_corrections", {}).keys())
-            insights.append(f"- Total Features Analyzed: {len(all_columns)}")
-            insights.append(f"- Model Name: {self._safe_value(model_summary.get('model_name', 'Unknown'))}")
-            insights.append(f"- Task Type: {self._safe_value(model_summary.get('task_type', 'Unknown'))}")
+            insights.append(f"- Total Features: {len(all_columns)}")
+            insights.append(f"- Model Used: {self._safe_value(model_name)}")
+            insights.append(f"- Task Type: {self._safe_value(task_type)}")
             insights.append("")
         except Exception as e:
-            insights.append(f"⚠️ Error in General Overview: {e}")
+            insights.append(f"⚠️ Error in Overview: {e}\n")
 
+        # -------- Missing Values -------- #
         try:
-            # 2️⃣ Missing Values
-            print("[InsightReporterAgent] Step 3: Data quality (missing values)...", flush=True)
-            missing_info = eda_summary.get("missing_percent", {}) or eda_summary.get("missing_values", {})
-            if missing_info:
-                high_missing = [col for col, pct in missing_info.items() if self._safe_value(pct) and pct > 30]
+            missing = (
+                eda_summary.get("missing_percent", {})
+                or eda_summary.get("missing_values", {})
+                or {}
+            )
+
+            if missing:
+                high_missing = [
+                    col for col, pct in missing.items()
+                    if pct and float(pct) > 30
+                ]
                 if high_missing:
                     insights.append("⚠️ High Missing Value Columns:")
                     for col in high_missing:
-                        insights.append(f"   - {col}: {missing_info[col]}% missing")
+                        insights.append(f"  - {col}: {missing[col]}%")
                 else:
-                    insights.append("✅ Minimal missing values across all features.")
+                    insights.append("✅ Minimal missing values.")
             else:
-                insights.append("✅ No missing values detected.")
+                insights.append("✅ No missing values.")
             insights.append("")
         except Exception as e:
-            insights.append(f"⚠️ Error in Missing Values: {e}")
+            insights.append(f"⚠️ Missing Value Error: {e}\n")
 
+        # -------- Outliers -------- #
         try:
-            # 3️⃣ Outlier Analysis
-            print("[InsightReporterAgent] Step 4: Outlier analysis...", flush=True)
-            outlier_info = eda_summary.get("outliers", {})
-            if outlier_info:
-                sorted_outliers = sorted(outlier_info.items(), key=lambda x: x[1], reverse=True)[:5]
-                insights.append("📊 Top Features with Outliers:")
-                for feature, count in sorted_outliers:
-                    insights.append(f"   - {feature}: {count} outliers detected")
+            outliers = eda_summary.get("outliers", {})
+            if outliers:
+                top5 = sorted(outliers.items(), key=lambda x: x[1], reverse=True)[:5]
+                insights.append("📊 Top Outlier Features:")
+                for f, c in top5:
+                    insights.append(f"  - {f}: {c} outliers")
             else:
-                insights.append("✅ No major outliers detected.")
+                insights.append("✅ No major outliers.")
             insights.append("")
         except Exception as e:
-            insights.append(f"⚠️ Error in Outlier Analysis: {e}")
+            insights.append(f"⚠️ Outlier Error: {e}\n")
 
+        # -------- Correlations -------- #
         try:
-            # 4️⃣ Correlation Insights
-            print("[InsightReporterAgent] Step 5: Correlation analysis...", flush=True)
-            top_corrs = eda_summary.get("top_correlations", [])
-            if top_corrs:
+            corrs = eda_summary.get("top_correlations", [])
+            if corrs:
                 insights.append("🔗 Strongest Correlations:")
-                for pair in top_corrs[:5]:
-                    insights.append(f"   - {pair}")
+                for pair in corrs[:5]:
+                    insights.append(f"  - {pair}")
             else:
                 insights.append("ℹ️ No strong correlations found.")
             insights.append("")
         except Exception as e:
-            insights.append(f"⚠️ Error in Correlation Insights: {e}")
+            insights.append(f"⚠️ Correlation Error: {e}\n")
 
+        # -------- Model Performance -------- #
         try:
-            # 5️⃣ Model Performance
-            print("[InsightReporterAgent] Step 6: Model performance...", flush=True)
+            insights.append("**Model Performance:**")
             metrics = model_summary.get("metrics", {})
-            task_type = model_summary.get("task_type", "unknown")
 
             if task_type == "classification":
-                acc = self._safe_value(metrics.get("accuracy"))
+                acc = best_score or metrics.get("accuracy")
                 if acc is not None:
-                    if acc >= 0.9:
-                        insights.append(f"✅ Model shows excellent accuracy ({acc * 100:.2f}%).")
-                    elif acc >= 0.75:
-                        insights.append(f"🟢 Model accuracy is good ({acc * 100:.2f}%).")
-                    else:
-                        insights.append(f"⚠️ Model accuracy is moderate ({acc * 100:.2f}%). Consider feature engineering or hyperparameter tuning.")
+                    acc = float(acc)
+                    insights.append(f"Accuracy: {acc:.3f}")
+                    if acc > 0.9: insights.append("✅ Excellent classification performance.")
+                    elif acc > 0.75: insights.append("🟢 Good performance.")
+                    else: insights.append("⚠️ Consider tuning or more data.")
+
             elif task_type == "regression":
-                r2 = self._safe_value(metrics.get("r2"))
-                mse = self._safe_value(metrics.get("mse"))
+                r2 = best_score or metrics.get("r2")
                 if r2 is not None:
-                    insights.append(f"📈 R² Score: {r2:.3f}")
-                    if r2 > 0.8:
-                        insights.append("✅ Strong predictive capability.")
-                    elif r2 > 0.5:
-                        insights.append("🟢 Moderate performance.")
-                    else:
-                        insights.append("⚠️ Weak predictive performance. Try more features or regularization.")
-                if mse is not None:
-                    insights.append(f"📉 Mean Squared Error (MSE): {mse:.3f}")
+                    r2 = float(r2)
+                    insights.append(f"R² Score: {r2:.3f}")
+                if metrics.get("mse") is not None:
+                    insights.append(f"MSE: {float(metrics['mse']):.3f}")
+
             insights.append("")
         except Exception as e:
-            insights.append(f"⚠️ Error in Model Performance: {e}")
+            insights.append(f"⚠️ Model Metrics Error: {e}\n")
 
+        # -------- Feature Importance -------- #
         try:
-            # 6️⃣ Recommendations
-            print("[InsightReporterAgent] Step 7: Adding recommendations...", flush=True)
-            insights.append("💡 **Recommendations:**")
-            insights.extend([
-                "- Consider feature scaling or normalization for better model stability.",
-                "- Try dimensionality reduction (PCA) if dataset has many features.",
-                "- Evaluate advanced models (e.g., XGBoost, LightGBM, CatBoost).",
-                "- Apply cross-validation for more reliable performance.",
-                "- Tune hyperparameters using GridSearchCV or Optuna.",
-                "- Check feature importance to remove low-impact columns."
-            ])
-            insights.append("")
+            fi = model_summary.get("feature_importance")
+            if fi:
+                top = sorted(fi.items(), key=lambda x: x[1], reverse=True)[:5]
+                insights.append("🔥 Top Influential Features:")
+                for k, v in top:
+                    insights.append(f"  - {k}: {v}")
+                insights.append("")
         except Exception as e:
-            insights.append(f"⚠️ Error in Recommendations: {e}")
+            insights.append(f"⚠️ Feature Importance Error: {e}\n")
 
-        print("[InsightReporterAgent] ✅ All sections processed successfully.", flush=True)
+        # -------- Recommendations -------- #
+        insights.append("💡 **Recommendations:**")
+        insights.extend([
+            "- Try hyperparameter tuning for improvement.",
+            "- Feature selection can boost performance.",
+            "- Consider boosting models like XGBoost/LightGBM.",
+            "- Evaluate using cross-validation.",
+            "- Normalize/standardize features if needed."
+        ])
+
         return "\n".join(insights)
 
-    # --------------------------- Main Process --------------------------- #
+    # ---------------------------------------------------------------------- #
+    # Main Process
+    # ---------------------------------------------------------------------- #
     def process(self, input_data):
-        """
-        input_data = {
-            "eda_path": "path/to/eda_summary.json",
-            "model_path": "path/to/model_summary.json"
-        }
-        """
-        start_time = time.time()
-
+        start = time.time()
         eda_path = input_data.get("eda_path")
         model_path = input_data.get("model_path")
 
         if not eda_path or not model_path:
             raise ValueError("Both 'eda_path' and 'model_path' must be provided.")
 
-        print(f"[{self.name}] Loading EDA & Model summaries...", flush=True)
+        print(f"[{self.name}] Loading JSON summaries...", flush=True)
         eda_summary = self._load_json(eda_path)
         model_summary = self._load_json(model_path)
 
-        print(f"[{self.name}] Generating rule-based insights...", flush=True)
         insights_text = self._generate_insights(eda_summary, model_summary)
 
-        report_txt_path = os.path.join(self.output_dir, "insights_report.txt")
-        report_json_path = os.path.join(self.output_dir, "insights_report.json")
+        report_txt = os.path.join(self.output_dir, "insights_report.txt")
+        report_json = os.path.join(self.output_dir, "insights_report.json")
 
-        print(f"[{self.name}] Writing reports to {self.output_dir}...", flush=True)
-        try:
-            with open(report_txt_path, "w", encoding="utf-8") as f:
-                f.write(insights_text)
-
-            report_data = {
-                "generated_at": datetime.now().isoformat(),
-                "duration_sec": round(time.time() - start_time, 2),
-                "eda_summary_keys": list(eda_summary.keys()),
-                "model_summary_keys": list(model_summary.keys()),
-                "insights_text": insights_text
-            }
-
-            with open(report_json_path, "w", encoding="utf-8") as f:
-                json.dump(report_data, f, indent=2)
-        except Exception as e:
-            raise RuntimeError(f"[{self.name}] Failed to write reports: {e}")
-
-        print(f"[{self.name}] ✅ Report generated successfully in {round(time.time() - start_time, 2)}s", flush=True)
-        return {
-            "insights_path": report_txt_path,
-            "report_json": report_json_path
+        result_data = {
+            "generated_at": datetime.now().isoformat(),
+            "duration_sec": round(time.time() - start, 2),
+            "eda_summary_keys": list(eda_summary.keys()),
+            "model_summary_keys": list(model_summary.keys()),
+            "insights_text": insights_text,
         }
 
+        with open(report_txt, "w", encoding="utf-8") as f:
+            f.write(insights_text)
+        with open(report_json, "w", encoding="utf-8") as f:
+            json.dump(result_data, f, indent=2)
 
-# --------------------------- Local Test --------------------------- #
-if __name__ == "__main__":
-    agent = InsightReporterAgent()
-    test_input = {
-        "eda_path": "data/eda_summary.json",
-        "model_path": "data/models/Species_LogisticRegression_summary.json"
-    }
-    result = agent.process(test_input)
-    print("\n✅ Insight Report Generated:\n", result)
+        print(f"[{self.name}] ✅ Insight report generated.")
+        return {
+            "insights_path": report_txt,
+            "report_json": report_json
+        }

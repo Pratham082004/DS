@@ -1,6 +1,6 @@
 {
-  "generated_at": "2025-11-03T12:04:18.624248",
-  "duration_sec": 0.01,
+  "generated_at": "2025-11-16T15:47:45.142456",
+  "duration_sec": 0.05,
   "eda_summary_keys": [
     "overview",
     "dtype_corrections",
@@ -16,6 +16,7 @@
   ],
   "model_summary_keys": [
     "task_type",
+    "target_column",
     "best_model",
     "metric_used",
     "best_score",
@@ -24,5 +25,5 @@
     "feature_importance",
     "model_path"
   ],
-  "insights_text": "=== \ud83d\udcca Automated Insights Report ===\n\n**General Overview:**\n- Total Features Analyzed: 0\n- Model Name: Unknown\n- Task Type: classification\n\n\u2705 Minimal missing values across all features.\n\n\u26a0\ufe0f Error in Outlier Analysis: '<' not supported between instances of 'dict' and 'dict'\n\u2139\ufe0f No strong correlations found.\n\n\n\ud83d\udca1 **Recommendations:**\n- Consider feature scaling or normalization for better model stability.\n- Try dimensionality reduction (PCA) if dataset has many features.\n- Evaluate advanced models (e.g., XGBoost, LightGBM, CatBoost).\n- Apply cross-validation for more reliable performance.\n- Tune hyperparameters using GridSearchCV or Optuna.\n- Check feature importance to remove low-impact columns.\n"
+  "insights_text": "=== \ud83d\udcca Automated Insights Report ===\n\n**General Overview:**\n- Total Features: 0\n- Model Used: LinearRegression\n- Task Type: regression\n\n\u2705 Minimal missing values.\n\n\u26a0\ufe0f Outlier Error: '<' not supported between instances of 'dict' and 'dict'\n\n\u2139\ufe0f No strong correlations found.\n\n**Model Performance:**\nR\u00b2 Score: 1.000\n\n\ud83d\udca1 **Recommendations:**\n- Try hyperparameter tuning for improvement.\n- Feature selection can boost performance.\n- Consider boosting models like XGBoost/LightGBM.\n- Evaluate using cross-validation.\n- Normalize/standardize features if needed."
 }

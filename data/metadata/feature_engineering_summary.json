@@ -1,0 +1,39 @@
+{
+  "imputation": {
+    "imputation": {
+      "numerical": "median",
+      "categorical": "most_frequent"
+    }
+  },
+  "encoding": {
+    "Species": {
+      "method": "onehot"
+    }
+  },
+  "scaling": {
+    "scaled_columns": [
+      "SepalLengthCm",
+      "SepalWidthCm",
+      "PetalLengthCm",
+      "PetalWidthCm",
+      "Species__Iris-setosa",
+      "Species__Iris-versicolor",
+      "Species__Iris-virginica"
+    ]
+  },
+  "polynomial": {
+    "poly": {
+      "degree": 2,
+      "generated": 28
+    }
+  },
+  "target": null,
+  "original_shape": [
+    150,
+    5
+  ],
+  "processed_shape": [
+    150,
+    35
+  ]
+}

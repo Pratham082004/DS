@@ -1,0 +1,63 @@
+{
+  "model_name": "Species__Iris-setosa_LinearRegression",
+  "generated_at": "2025-11-16 15:47:44",
+  "performance": {},
+  "model_based_importance": {
+    "Species__Iris-setosa^2": 0.285714,
+    "Species__Iris-versicolor Species__Iris-virginica": 0.285714,
+    "Species__Iris-versicolor": 0.142857,
+    "Species__Iris-virginica": 0.142857,
+    "Species__Iris-setosa Species__Iris-versicolor": 0.142857,
+    "Species__Iris-setosa Species__Iris-virginica": 0.142857,
+    "Species__Iris-versicolor^2": 0.142857,
+    "Species__Iris-virginica^2": 0.142857,
+    "SepalLengthCm": 0.0,
+    "SepalWidthCm": 0.0,
+    "PetalLengthCm": 0.0,
+    "PetalWidthCm": 0.0,
+    "SepalLengthCm^2": 0.0,
+    "SepalLengthCm SepalWidthCm": 0.0,
+    "SepalLengthCm PetalLengthCm": 0.0,
+    "SepalLengthCm PetalWidthCm": 0.0,
+    "SepalLengthCm Species__Iris-setosa": 0.0,
+    "SepalLengthCm Species__Iris-versicolor": 0.0,
+    "SepalLengthCm Species__Iris-virginica": 0.0,
+    "SepalWidthCm^2": 0.0,
+    "SepalWidthCm PetalLengthCm": 0.0,
+    "SepalWidthCm PetalWidthCm": 0.0,
+    "SepalWidthCm Species__Iris-setosa": 0.0,
+    "SepalWidthCm Species__Iris-versicolor": 0.0,
+    "SepalWidthCm Species__Iris-virginica": 0.0,
+    "PetalLengthCm^2": 0.0,
+    "PetalLengthCm PetalWidthCm": 0.0,
+    "PetalLengthCm Species__Iris-setosa": 0.0,
+    "PetalLengthCm Species__Iris-versicolor": 0.0,
+    "PetalLengthCm Species__Iris-virginica": 0.0,
+    "PetalWidthCm^2": 0.0,
+    "PetalWidthCm Species__Iris-setosa": 0.0,
+    "PetalWidthCm Species__Iris-versicolor": 0.0,
+    "PetalWidthCm Species__Iris-virginica": 0.0
+  },
+  "permutation_importance": {},
+  "top_features": [
+    "Species__Iris-setosa^2",
+    "Species__Iris-versicolor Species__Iris-virginica",
+    "Species__Iris-versicolor",
+    "Species__Iris-virginica",
+    "Species__Iris-setosa Species__Iris-versicolor",
+    "Species__Iris-setosa Species__Iris-virginica",
+    "Species__Iris-versicolor^2",
+    "Species__Iris-virginica^2"
+  ],
+  "pdp_plots": [
+    "data/reports\\Species__Iris-setosa_LinearRegression_pdp_Species__Iris-setosa^2.png",
+    "data/reports\\Species__Iris-setosa_LinearRegression_pdp_Species__Iris-versicolor Species__Iris-virginica.png",
+    "data/reports\\Species__Iris-setosa_LinearRegression_pdp_Species__Iris-versicolor.png"
+  ],
+  "local_explanations": [],
+  "shap": {
+    "available": false,
+    "summary_plot": null
+  },
+  "feature_importance_plot": "data/reports\\Species__Iris-setosa_LinearRegression_feature_importance.png"
+}

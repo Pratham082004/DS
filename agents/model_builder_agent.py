@@ -1,21 +1,24 @@
 """
-Agent 2: ModelBuilderAgent (Enhanced Non-LLM Version)
+Agent 2: ModelBuilderAgent (Enhanced & Fixed Version)
 -----------------------------------------------------
-Automatically detects target column, determines task type (classification/regression),
-and trains the best model using sklearn.
+Automatically detects the target column, determines task type (classification/regression),
+trains the best model using sklearn, and exports clean summary output.
 
-Outputs:
-- Trained model (.pkl)
-- Summary JSON (for InsightsAgent)
-- Performance metrics
-- Feature importances (if applicable)
+Fixes:
+- Uses `type_of_target` for reliable task detection
+- Prevents 'unknown label type: continuous' error
+- Adds fail-safe for all models
+- Uses joblib for model saving
+- Improves debug logging
 """
 
 import os
 import json
 import time
-import pandas as pd
+import joblib
+import warnings
 import numpy as np
+import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score, f1_score, precision_score, recall_score,
@@ -24,8 +27,9 @@ from sklearn.metrics import (
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.ensemble import (
     RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier,
-    BaggingClassifier, ExtraTreesClassifier, RandomForestRegressor,
-    GradientBoostingRegressor, AdaBoostRegressor, BaggingRegressor, ExtraTreesRegressor
+    BaggingClassifier, ExtraTreesClassifier,
+    RandomForestRegressor, GradientBoostingRegressor, AdaBoostRegressor,
+    BaggingRegressor, ExtraTreesRegressor
 )
 from sklearn.linear_model import (
     LogisticRegression, RidgeClassifier, LinearRegression, Ridge, Lasso
@@ -35,7 +39,7 @@ from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC, SVR
 from sklearn.neural_network import MLPClassifier, MLPRegressor
-import warnings
+from sklearn.utils.multiclass import type_of_target
 
 warnings.filterwarnings("ignore")
 
@@ -48,52 +52,55 @@ class ModelBuilderAgent:
 
     # --------------------------- Target Detection --------------------------- #
     def _detect_target_column(self, df):
-        """Automatically detect target column based on dtype and uniqueness."""
-        categorical_candidates = df.select_dtypes(include=["object", "category", "bool"]).columns.tolist()
-
-        if categorical_candidates:
-            target_col = min(categorical_candidates, key=lambda col: df[col].nunique())
+        """Automatically detect the target column based on dtype and uniqueness."""
+        cat_cols = df.select_dtypes(include=["object", "category", "bool"]).columns.tolist()
+        if cat_cols:
+            target_col = min(cat_cols, key=lambda c: df[c].nunique())
             print(f"[ModelBuilderAgent] Auto-detected categorical target: {target_col}")
             return target_col
 
-        numeric_candidates = df.select_dtypes(include="number").columns.tolist()
-        if numeric_candidates:
-            target_col = min(numeric_candidates, key=lambda col: df[col].nunique())
+        num_cols = df.select_dtypes(include="number").columns.tolist()
+        if num_cols:
+            target_col = min(num_cols, key=lambda c: df[c].nunique())
             print(f"[ModelBuilderAgent] Auto-detected numeric target: {target_col}")
             return target_col
 
-        raise ValueError("No suitable target column found in dataset.")
+        raise ValueError("❌ No suitable target column found in dataset.")
 
     # --------------------------- Task Detection --------------------------- #
-    def _detect_task_type(self, df, target_col):
-        """Detect if task is classification or regression."""
-        target_data = df[target_col]
-        if target_data.dtype in ["object", "category", "bool"]:
+    def _detect_task_type(self, y):
+        """Reliable detection of classification/regression."""
+        y_type = type_of_target(y)
+        if y_type in ["binary", "multiclass"]:
             return "classification"
-        if target_data.nunique() <= 10:
-            return "classification"
-        return "regression"
+        elif y_type in ["continuous", "continuous-multioutput"]:
+            return "regression"
+        else:
+            # Fallback rule
+            return "classification" if len(np.unique(y)) <= 10 else "regression"
 
     # --------------------------- Data Preparation --------------------------- #
     def _prepare_data(self, df, target_col):
-        """Encode categorical features and scale numeric data."""
+        """Encode categorical columns and scale numeric ones."""
         df = df.copy()
 
-        # Encode categorical features
+        # Encode all categorical/object columns
         for col in df.select_dtypes(include=["object", "category", "bool"]).columns:
             le = LabelEncoder()
             df[col] = le.fit_transform(df[col].astype(str))
 
         X = df.drop(columns=[target_col])
-        y = df[target_col]
+        y = df[target_col].copy()
 
-        if y.dtype == "object" or y.dtype.name == "category":
+        # Ensure y numeric for models
+        if y.dtype in ["object", "category", "bool"]:
             y = LabelEncoder().fit_transform(y.astype(str))
 
+        # Scale features
         scaler = StandardScaler()
-        X = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
+        X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
 
-        return X, y
+        return X_scaled, y
 
     # --------------------------- Classification Models --------------------------- #
     def _get_classification_models(self):
@@ -108,7 +115,7 @@ class ModelBuilderAgent:
             "BaggingClassifier": BaggingClassifier(),
             "KNeighborsClassifier": KNeighborsClassifier(),
             "GaussianNB": GaussianNB(),
-            "SVC": SVC(),
+            "SVC": SVC(probability=True),
             "MLPClassifier": MLPClassifier(max_iter=500),
         }
 
@@ -131,7 +138,7 @@ class ModelBuilderAgent:
 
     # --------------------------- Training & Evaluation --------------------------- #
     def _train_and_evaluate(self, X_train, X_test, y_train, y_test, models, task_type):
-        """Train multiple models and pick the best based on metric."""
+        """Train multiple models and find the best one."""
         results = {}
         best_model = None
         best_score = -np.inf
@@ -141,43 +148,46 @@ class ModelBuilderAgent:
                 start = time.time()
                 model.fit(X_train, y_train)
                 preds = model.predict(X_test)
-                end = time.time()
+                elapsed = time.time() - start
 
                 if task_type == "classification":
                     acc = accuracy_score(y_test, preds)
                     results[name] = acc
                     if acc > best_score:
                         best_score = acc
-                        best_model = (name, model, round(acc, 4), end - start)
+                        best_model = (name, model, round(acc, 4), elapsed)
                 else:
                     r2 = r2_score(y_test, preds)
                     results[name] = r2
                     if r2 > best_score:
                         best_score = r2
-                        best_model = (name, model, round(r2, 4), end - start)
+                        best_model = (name, model, round(r2, 4), elapsed)
+
             except Exception as e:
-                print(f"[ModelBuilderAgent] ⚠️ Skipping {name}: {str(e)}")
+                print(f"[ModelBuilderAgent] ⚠️ {name} failed: {e}")
+
+        if not best_model:
+            raise RuntimeError("❌ No model could be successfully trained. Check your dataset.")
 
         return best_model, results
 
-    # --------------------------- Core Process --------------------------- #
+    # --------------------------- Main Process --------------------------- #
     def process(self, input_data):
         dataset_path = input_data.get("dataset_path")
-        if not dataset_path:
-            raise ValueError("dataset_path is required.")
-
-        if not os.path.exists(dataset_path):
+        if not dataset_path or not os.path.exists(dataset_path):
             raise FileNotFoundError(f"Dataset not found: {dataset_path}")
 
         df = pd.read_csv(dataset_path)
 
-        # Detect target
         target_col = input_data.get("target") or self._detect_target_column(df)
         if target_col not in df.columns:
-            raise ValueError(f"Target column '{target_col}' not found in dataset.")
+            raise ValueError(f"❌ Target column '{target_col}' not found in dataset.")
 
-        task_type = self._detect_task_type(df, target_col)
         X, y = self._prepare_data(df, target_col)
+        task_type = self._detect_task_type(y)
+
+        print(f"[ModelBuilderAgent] 🔍 Detected task type: {task_type}")
+        print(f"[ModelBuilderAgent] Target: {target_col} | Shape: {X.shape}")
 
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
@@ -189,26 +199,21 @@ class ModelBuilderAgent:
             else self._get_regression_models()
         )
 
-        best_model, all_scores = self._train_and_evaluate(
-            X_train, X_test, y_train, y_test, models, task_type
-        )
-
+        best_model, all_scores = self._train_and_evaluate(X_train, X_test, y_train, y_test, models, task_type)
         best_model_name, model, best_score, training_time = best_model
 
-        # Save best model
-        model_path = os.path.join(self.model_dir, f"{target_col}_{best_model_name}.pkl")
-        pd.to_pickle(model, model_path)
+        # Save model
+        model_path = os.path.join(self.model_dir, f"{target_col}_{best_model_name}.joblib")
+        joblib.dump(model, model_path)
 
-        # Feature importances (if supported)
+        # Feature importance (if supported)
         feature_importance = None
         if hasattr(model, "feature_importances_"):
-            feature_importance = dict(
-                zip(X.columns, model.feature_importances_.round(4).tolist())
-            )
+            feature_importance = dict(zip(X.columns, model.feature_importances_.round(4).tolist()))
 
-        # Build summary
         result = {
             "task_type": task_type,
+            "target_column": target_col,
             "best_model": best_model_name,
             "metric_used": "accuracy" if task_type == "classification" else "r2_score",
             "best_score": best_score,
@@ -218,15 +223,13 @@ class ModelBuilderAgent:
             "model_path": model_path,
         }
 
-        # ✅ Correct summary filename for orchestrator
-        summary_path = os.path.join(
-            self.model_dir, f"{target_col}_{best_model_name}_summary.json"
-        )
+        summary_path = os.path.join(self.model_dir, f"{target_col}_{best_model_name}_summary.json")
         with open(summary_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=4)
 
-        print(f"[ModelBuilderAgent] ✅ Best Model: {best_model_name} (score: {best_score})")
-        print(f"[ModelBuilderAgent] Summary saved to: {summary_path}")
+        print(f"\n✅ Best Model: {best_model_name} ({result['metric_used']} = {best_score})")
+        print(f"📦 Model saved at: {model_path}")
+        print(f"📊 Summary saved at: {summary_path}\n")
 
         return result
 
@@ -236,4 +239,4 @@ if __name__ == "__main__":
     agent = ModelBuilderAgent()
     test_input = {"dataset_path": "data/sample_dataset.csv"}
     result = agent.process(test_input)
-    print("\n✅ Model Training Summary:\n", json.dumps(result, indent=2))
+    print(json.dumps(result, indent=2))

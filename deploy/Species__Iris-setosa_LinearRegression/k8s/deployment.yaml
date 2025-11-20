@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: Species__Iris-setosa_LinearRegression-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: Species__Iris-setosa_LinearRegression
+  template:
+    metadata:
+      labels:
+        app: Species__Iris-setosa_LinearRegression
+    spec:
+      containers:
+      - name: model-server
+        image: REPLACE_WITH_YOUR_IMAGE
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MODEL_ID
+          value: "Species__Iris-setosa_LinearRegression"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: Species__Iris-setosa_LinearRegression-svc
+spec:
+  selector:
+    app: Species__Iris-setosa_LinearRegression
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
